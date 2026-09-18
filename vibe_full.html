@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vibe — общение без границ</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--surface:#13131f;--accent:#7c5cff;--accent2:#ff5ce5;--text:#fff;--muted:#888;--ok:#22c55e;--danger:#ef4444}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+body::before{content:'';position:fixed;top:-200px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(124,92,255,.15),transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-200px;left:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,92,229,.12),transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
+
+/* ===== HERO / START SCREEN ===== */
+#hero{position:absolute;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+#hero.hidden{display:none}
+.hero-tag{font-size:13px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-bottom:16px}
+.hero-logo{font-size:64px;font-weight:800;letter-spacing:-2px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;text-align:center}
+.hero-desc{text-align:center;color:var(--muted);max-width:420px;line-height:1.6;margin-bottom:36px;font-size:15px}
+.hero-desc b{color:#ccc}
+.hero-mode-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.mode-btn{background:var(--surface);border:1px solid #2a2a3a;border-radius:14px;padding:18px 24px;cursor:pointer;transition:.25s;text-align:center;min-width:160px}
+.mode-btn:hover{border-color:var(--accent);transform:translateY(-2px)}
+.mode-btn .icon{font-size:28px;display:block;margin-bottom:6px}
+.mode-btn .label{font-size:14px;font-weight:600}
+.mode-btn .sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ===== CONNECT SCREEN ===== */
+#connect-screen{position:absolute;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+#connect-screen.hidden{display:none}
+.cs-title{font-size:20px;font-weight:700;margin-bottom:24px}
+.my-code-box{text-align:center;margin-bottom:28px}
+.my-code-label{font-size:13px;color:var(--muted);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase}
+.my-code{font-size:42px;font-weight:800;letter-spacing:8px;cursor:pointer;padding:8px 24px;border-radius:12px;background:var(--surface);border:1px solid #2a2a3a;transition:.2s;display:inline-block}
+.my-code:hover{border-color:var(--accent);box-shadow:0 0 20px rgba(124,92,255,.2)}
+.code-hint{font-size:12px;color:var(--muted);margin-top:8px}
+.divider{display:flex;align-items:center;gap:12px;margin-bottom:24px;color:var(--muted);font-size:13px;width:100%;max-width:320px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:#2a2a3a}
+.connect-form{display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px}
+.connect-form input{background:var(--surface);border:1px solid #2a2a3a;border-radius:10px;padding:14px 16px;color:var(--text);font-size:16px;text-align:center;letter-spacing:4px;outline:none}
+.connect-form input:focus{border-color:var(--accent)}
+.connect-form input::placeholder{color:#444;letter-spacing:1px;font-weight:400}
+.connect-form button{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;padding:14px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s}
+.connect-form button:hover{opacity:.9;transform:translateY(-1px)}
+.back-btn{margin-top:16px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px}
+.back-btn:hover{color:var(--text)}
+
+/* ===== APP SCREEN ===== */
+#app{display:none;flex-direction:column;height:100vh;position:relative;z-index:10}
+#app.active{display:flex}
+.app-header{display:flex;align-items:center;padding:12px 16px;background:var(--surface);border-bottom:1px solid #1a1a28;gap:12px}
+.app-header .peer-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
+.app-header .peer-info{flex:1}
+.app-header .peer-name{font-size:15px;font-weight:600}
+.app-header .peer-status{font-size:12px;color:var(--ok)}
+.app-header .call-btn{background:none;border:none;font-size:20px;cursor:pointer;padding:8px;border-radius:50%;transition:.2s}
+.app-header .call-btn:hover{background:#1a1a28}
+.chat-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
+.msg{max-width:75%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.45;word-wrap:break-word;animation:slideIn .25s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.me{align-self:flex-end;background:linear-gradient(135deg,var(--accent),#6940e0);border-bottom-right-radius:4px}
+.msg.them{align-self:flex-start;background:var(--surface);border:1px solid #1a1a28;border-bottom-left-radius:4px}
+.msg.voice{display:flex;align-items:center;gap:8px;cursor:pointer;min-width:160px}
+.msg.voice .play-icon{font-size:18px}
+.msg.voice .wave{flex:1;height:24px;display:flex;align-items:center;gap:2px}
+.msg.voice .wave span{width:3px;background:rgba(255,255,255,.4);border-radius:2px;animation:none}
+.msg.voice .dur{font-size:12px;color:rgba(255,255,255,.7);white-space:nowrap}
+.msg.them.voice .wave span{background:rgba(255,255,255,.25)}
+.input-area{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border-top:1px solid #1a1a28}
+.input-area textarea{flex:1;background:#1a1a28;border:1px solid #2a2a3a;border-radius:10px;padding:12px 14px;color:var(--text);font-size:14px;resize:none;max-height:120px;min-height:44px;outline:none;font-family:inherit;line-height:1.4}
+.input-area textarea:focus{border-color:var(--accent)}
+.send-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;width:44px;height:44px;font-size:18px;cursor:pointer;color:#fff;flex-shrink:0;transition:.2s}
+.send-btn:hover{opacity:.85;transform:scale(1.05)}
+.send-btn:disabled{opacity:.4;cursor:default}
+.voice-btn{background:var(--surface);border:1px solid #2a2a3a;border-radius:10px;width:44px;height:44px;font-size:18px;cursor:pointer;flex-shrink:0;transition:.2s;user-select:none;-webkit-user-select:none}
+.voice-btn:hover{border-color:var(--accent)}
+.voice-btn.recording{background:var(--danger);border-color:var(--danger);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ===== CALL OVERLAY ===== */
+#call-overlay{position:absolute;inset:0;z-index:200;background:rgba(10,10,15,.96);display:none;flex-direction:column;align-items:center;justify-content:center}
+#call-overlay.active{display:flex}
+.call-avatar{width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;margin-bottom:20px;animation:callPulse 2s ease-in-out infinite}
+@keyframes callPulse{0%,100%{box-shadow:0 0 0 0 rgba(124,92,255,.3)}50%{box-shadow:0 0 0 20px rgba(124,92,255,0)}}
+.call-name{font-size:22px;font-weight:700;margin-bottom:6px}
+.call-timer{font-size:15px;color:var(--muted);margin-bottom:32px;letter-spacing:1px}
+.call-end-btn{background:var(--danger);border:none;border-radius:50%;width:64px;height:64px;font-size:26px;cursor:pointer;color:#fff;transition:.2s}
+.call-end-btn:hover{transform:scale(1.1)}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--surface);border:1px solid #2a2a3a;border-radius:10px;padding:12px 20px;font-size:14px;z-index:300;transition:.3s;opacity:0;pointer-events:none;max-width:90%;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#3a3a4a}
+
+@media(max-width:480px){
+.hero-logo{font-size:48px}
+.my-code{font-size:34px;letter-spacing:6px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HERO / START SCREEN ===== -->
+<div id="hero">
+  <div class="hero-tag">общение без границ</div>
+  <div class="hero-logo">vibe</div>
+  <div class="hero-desc">
+    Бесплатный веб-апп для прямого общения один на один: <b>текстовый чат</b>, <b>голосовые сообщения</b> и <b>звонки</b>. Без регистрации, без серверов, без рекламы. Открыл — получил код — скинул другу — вы на связи.
+  </div>
+  <div class="hero-mode-btns">
+    <div class="mode-btn" onclick="showConnect()">
+      <span class="icon">🔗</span>
+      <span class="label">Создать комнату</span>
+      <span class="sub">Получить код</span>
+    </div>
+    <div class="mode-btn" onclick="showJoin()">
+      <span class="icon">⚡</span>
+      <span class="label">Войти по коду</span>
+      <span class="sub">Ввести код друга</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONNECT SCREEN ===== -->
+<div id="connect-screen" class="hidden">
+  <div class="cs-title" id="cs-title">Создать комнату</div>
+
+  <div class="my-code-box" id="my-code-box">
+    <div class="my-code-label">Ваш код</div>
+    <div class="my-code" id="my-code" onclick="copyCode()">------</div>
+    <div class="code-hint">Нажмите, чтобы скопировать</div>
+  </div>
+
+  <div class="divider" id="divider">или</div>
+
+  <div class="connect-form" id="join-form" style="display:none">
+    <input type="text" id="peer-input" placeholder="Введите код" maxlength="6" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+    <button onclick="connectToPeer()">Связаться</button>
+  </div>
+
+  <button class="back-btn" onclick="backToHero()">← Назад</button>
+  <div id="connecting-hint" style="margin-top:12px;color:var(--muted);font-size:13px;display:none">Подождите, подключение…</div>
+</div>
+
+<!-- ===== APP SCREEN ===== -->
+<div id="app">
+  <div class="app-header">
+    <div class="peer-avatar" id="peer-avatar">👤</div>
+    <div class="peer-info">
+      <div class="peer-name" id="peer-name">Собеседник</div>
+      <div class="peer-status" id="peer-status">В сети</div>
+    </div>
+    <button class="call-btn" onclick="startCall()">📞</button>
+  </div>
+
+  <div class="chat-area" id="chat-area"></div>
+
+  <div class="input-area">
+    <div class="voice-btn" id="voice-btn" title="Удерживайте для записи">🎙</div>
+    <textarea id="msg-input" rows="1" placeholder="Сообщение…" oninput="autoResize(this)"></textarea>
+    <button class="send-btn" id="send-btn" onclick="sendMsg()">➤</button>
+  </div>
+</div>
+
+<!-- ===== CALL OVERLAY ===== -->
+<div id="call-overlay">
+  <div class="call-avatar" id="call-avatar">👤</div>
+  <div class="call-name" id="call-name">Собеседник</div>
+  <div class="call-timer" id="call-timer">00:00</div>
+  <button class="call-end-btn" onclick="endCall()">📵</button>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toast"></div>
+
+<script>
+let peer=null,conn=null,myCode='',isHost=false;
+let callObj=null,localStream=null,callTimer=null,callSeconds=0;
+let mediaRecorder=null,voiceChunks=[];
+let isRecording=false;
+
+/* ===== INIT ===== */
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function genCode(){
+  return Math.floor(100000+Math.random()*900000).toString();
+}
+
+function showConnect(){
+  document.getElementById('hero').classList.add('hidden');
+  document.getElementById('connect-screen').classList.remove('hidden');
+  document.getElementById('cs-title').textContent='Создать комнату';
+  document.getElementById('my-code-box').style.display='block';
+  document.getElementById('divider').style.display='flex';
+  document.getElementById('join-form').style.display='none';
+  isHost=true;
+  initPeer();
+}
+
+function showJoin(){
+  document.getElementById('hero').classList.add('hidden');
+  document.getElementById('connect-screen').classList.remove('hidden');
+  document.getElementById('cs-title').textContent='Войти по коду';
+  document.getElementById('my-code-box').style.display='none';
+  document.getElementById('divider').style.display='none';
+  document.getElementById('join-form').style.display='flex';
+  isHost=false;
+  initPeer();
+}
+
+function backToHero(){
+  if(peer){peer.destroy();peer=null;}
+  document.getElementById('hero').classList.remove('hidden');
+  document.getElementById('connect-screen').classList.add('hidden');
+  document.getElementById('my-code').textContent='------';
+  document.getElementById('peer-input').value='';
+  document.getElementById('connecting-hint').style.display='none';
+}
+
+function initPeer(){
+  myCode=genCode();
+  const peerId='tw_'+myCode;
+  peer=new Peer(peerId,{debug:1});
+  peer.on('open',()=>{
+    if(isHost){
+      document.getElementById('my-code').textContent=myCode;
+    }
+  });
+  peer.on('connection',(c)=>{
+    conn=c;
+    setupConn();
+  });
+  peer.on('call',(c)=>{
+    callObj=c;
+    navigator.mediaDevices.getUserMedia({audio:true})
+      .then(stream=>{
+        localStream=stream;
+        c.answer(stream);
+        c.on('stream',remoteStream=>{
+          playRemoteAudio(remoteStream);
+        });
+        startCallTimer();
+        document.getElementById('call-overlay').classList.add('active');
+      })
+      .catch(()=>showToast('Нет доступа к микрофону'));
+  });
+  peer.on('error',(err)=>{
+    if(err.type==='unavailable-id'){
+      myCode=genCode();
+      peer.destroy();
+      initPeer();
+    } else {
+      showToast('Ошибка: '+err.type);
+      document.getElementById('connecting-hint').style.display='none';
+    }
+  });
+}
+
+function connectToPeer(){
+  const code=document.getElementById('peer-input').value.trim();
+  if(code.length!==6){showToast('Введите 6-значный код');return;}
+  document.getElementById('connecting-hint').style.display='block';
+  const remoteId='tw_'+code;
+  conn=peer.connect(remoteId,{reliable:true});
+  setupConn();
+}
+
+function setupConn(){
+  conn.on('open',()=>{
+    document.getElementById('hero').classList.add('hidden');
+    document.getElementById('connect-screen').classList.add('hidden');
+    document.getElementById('app').classList.add('active');
+    showToast('Подключено!');
+  });
+  conn.on('data',data=>{
+    if(data.type==='text'){
+      addMessage('them',data.text);
+    } else if(data.type==='voice'){
+      addVoiceMessage('them',data.data,data.duration);
+    } else if(data.type==='call-end'){
+      endCall(true);
+    }
+  });
+  conn.on('close',()=>{
+    showToast('Собеседник отключился');
+    document.getElementById('peer-status').textContent='Не в сети';
+    document.getElementById('peer-status').style.color='var(--muted)';
+  });
+}
+
+/* ===== CHAT ===== */
+function sendMsg(){
+  const input=document.getElementById('msg-input');
+  const text=input.value.trim();
+  if(!text||!conn||!conn.open)return;
+  conn.send({type:'text',text:text});
+  addMessage('me',text);
+  input.value='';
+  input.style.height='auto';
+}
+
+function addMessage(who,text){
+  const area=document.getElementById('chat-area');
+  const div=document.createElement('div');
+  div.className='msg '+who;
+  div.textContent=text;
+  area.appendChild(div);
+  area.scrollTop=area.scrollHeight;
+}
+
+function autoResize(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,120)+'px';
+}
+
+document.getElementById('msg-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    sendMsg();
+  }
+});
+
+/* ===== VOICE MESSAGES ===== */
+const voiceBtn=document.getElementById('voice-btn');
+
+function startRecording(e){
+  e.preventDefault();
+  if(!conn||!conn.open)return;
+  navigator.mediaDevices.getUserMedia({audio:true})
+    .then(stream=>{
+      isRecording=true;
+      voiceChunks=[];
+      voiceBtn.classList.add('recording');
+      voiceBtn.textContent='⏺';
+      mediaRecorder=new MediaRecorder(stream);
+      mediaRecorder.ondataavailable,ev=>voiceChunks.push(ev.data);
+      mediaRecorder.onstop=()=>{
+        const blob=new Blob(voiceChunks,{type:'audio/webm'});
+        const reader=new FileReader();
+        reader.onloadend=()=>{
+          const base64=reader.result;
+          const duration=Math.round((Date.now()-recStart)/1000);
+          conn.send({type:'voice',data:base64,duration:duration});
+          addVoiceMessage('me',base64,duration);
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach(t=>t.stop());
+      };
+      recStart=Date.now();
+      mediaRecorder.start();
+    })
+    .catch(()=>showToast('Нет доступа к микрофону'));
+}
+
+let recStart=0;
+
+function stopRecording(){
+  if(!isRecording)return;
+  isRecording=false;
+  voiceBtn.classList.remove('recording');
+  voiceBtn.textContent='🎙';
+  if(mediaRecorder&&mediaRecorder.state==='recording'){
+    mediaRecorder.stop();
+  }
+}
+
+voiceBtn.addEventListener('mousedown',startRecording);
+voiceBtn.addEventListener('mouseup',stopRecording);
+voiceBtn.addEventListener('mouseleave',stopRecording);
+voiceBtn.addEventListener('touchstart',startRecording);
+voiceBtn.addEventListener('touchend',stopRecording);
+
+function addVoiceMessage(who,base64,duration){
+  const area=document.getElementById('chat-area');
+  const div=document.createElement('div');
+  div.className='msg '+who+' voice';
+  div.innerHTML='<span class="play-icon">▶</span><div class="wave">'+makeWave()+'</div><span class="dur">'+formatDur(duration)+'</span>';
+  div.onclick=()=>{
+    const audio=new Audio(base64);
+    audio.play();
+    const icon=div.querySelector('.play-icon');
+    icon.textContent='⏸';
+    audio.onended=()=>icon.textContent='▶';
+  };
+  area.appendChild(div);
+  area.scrollTop=area.scrollHeight;
+}
+
+function makeWave(){
+  let h='';
+  for(let i=0;i<20;i++){
+    const h2=Math.floor(Math.random()*20)+4;
+    h+='<span style="height:'+h2+'px"></span>';
+  }
+  return h;
+}
+
+function formatDur(s){
+  if(s<1)s=1;
+  return s<60?s+'с':'1:'+String(s-60).padStart(2,'0');
+}
+
+/* ===== CALLS ===== */
+function startCall(){
+  if(!conn||!conn.open){showToast('Нет подключения');return;}
+  navigator.mediaDevices.getUserMedia({audio:true})
+    .then(stream=>{
+      localStream=stream;
+      callObj=peer.call(conn.peer,stream);
+      callObj.on('stream',remoteStream=>{
+        playRemoteAudio(remoteStream);
+      });
+      startCallTimer();
+      document.getElementById('call-overlay').classList.add('active');
+    })
+    .catch(()=>showToast('Нет доступа к микрофону'));
+}
+
+function playRemoteAudio(stream){
+  let audio=document.getElementById('remote-audio');
+  if(!audio){
+    audio=document.createElement('audio');
+    audio.id='remote-audio';
+    audio.autoplay=true;
+    document.body.appendChild(audio);
+  }
+  audio.srcObject=stream;
+  audio.play();
+}
+
+function startCallTimer(){
+  callSeconds=0;
+  updateTimer();
+  callTimer=setInterval(()=>{
+    callSeconds++;
+    updateTimer();
+  },1000);
+}
+
+function updateTimer(){
+  const m=Math.floor(callSeconds/60);
+  const s=callSeconds%60;
+  document.getElementById('call-timer').textContent=
+    String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+function endCall(remote){
+  if(callTimer){clearInterval(callTimer);callTimer=null;}
+  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+  if(callObj){callObj.close();callObj=null;}
+  document.getElementById('call-overlay').classList.remove('active');
+  if(conn&&conn.open&&!remote){
+    conn.send({type:'call-end'});
+  }
+}
+
+/* ===== COPY CODE ===== */
+function copyCode(){
+  if(myCode&&myCode!=='------'){
+    navigator.clipboard.writeText(myCode).then(()=>showToast('Код скопирован: '+myCode));
+  }
+}
+
+/* ===== INIT INPUT BUTTON STATE ===== */
+setInterval(()=>{
+  const btn=document.getElementById('send-btn');
+  const input=document.getElementById('msg-input');
+  if(btn&&input){
+    btn.disabled=!input.value.trim();
+  }
+},200);
+</script>
+</body>
+</html>
